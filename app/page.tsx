@@ -1,65 +1,178 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+
+interface Menu {
+  id: number;
+  name: string;
+  price: number;
+  supply: number;
+}
+
+export default function HomePage() {
+  const router = useRouter();
+
+  const [menus, setMenus] = useState<Menu[]>([]);
+  const [customerName, setCustomerName] = useState("");
+
+  const [qtyMap, setQtyMap] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    const fetchMenus = async () => {
+      try {
+        const response = await fetch("/api/menu");
+
+        const result = await response.json();
+
+        setMenus(result.data ?? []);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    fetchMenus();
+  }, []);
+
+  function updateQty(menuId: number, value: number) {
+    setQtyMap((prev) => ({
+      ...prev,
+      [menuId]: value,
+    }));
+  }
+
+  const totalPrice = useMemo(() => {
+    return menus.reduce((total, menu) => {
+      const qty = qtyMap[menu.id] || 0;
+
+      return total + menu.price * qty;
+    }, 0);
+  }, [menus, qtyMap]);
+
+  async function submitOrder() {
+    const items = Object.entries(qtyMap)
+      .filter(([_, qty]) => qty > 0)
+      .map(([menuId, qty]) => ({
+        menuId: Number(menuId),
+        qty,
+      }));
+
+    if (!customerName) {
+      alert("Customer name is required");
+      return;
+    }
+
+    if (items.length === 0) {
+      alert("Please select at least 1 menu");
+      return;
+    }
+
+    const response = await fetch("/api/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: customerName,
+        items,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.error);
+      return;
+    }
+
+    router.push(`/orders/${result.data.id}`);
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main
+      style={{
+        padding: "24px",
+        maxWidth: "900px",
+        margin: "0 auto",
+      }}
+    >
+      <h1>Cafe Order App</h1>
+
+      <h2>Menu List</h2>
+
+      <table
+        border={1}
+        cellPadding={10}
+        style={{
+          width: "100%",
+          marginBottom: "24px",
+        }}
+      >
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Menu Name</th>
+            <th>Price</th>
+            <th>Supply</th>
+            <th>Qty</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {menus.map((menu) => (
+            <tr key={menu.id}>
+              <td>{menu.id}</td>
+
+              <td>{menu.name}</td>
+
+              <td>
+                Rp
+                {menu.price.toLocaleString("id-ID")}
+              </td>
+
+              <td>{menu.supply}</td>
+
+              <td>
+                <input
+                  type="number"
+                  min={0}
+                  max={menu.supply}
+                  value={qtyMap[menu.id] || 0}
+                  onChange={(e) => updateQty(menu.id, Number(e.target.value))}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2>Create Order</h2>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+        }}
+      >
+        <label>Customer Name</label>
+
+        <input
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          placeholder="Input customer name"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+
+        <div>
+          Total Price:
+          <strong>
+            {" "}
+            Rp
+            {totalPrice.toLocaleString("id-ID")}
+          </strong>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        <button onClick={submitOrder}>Submit Order</button>
+      </div>
+    </main>
   );
 }
